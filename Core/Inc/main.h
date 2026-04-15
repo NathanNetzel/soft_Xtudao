@@ -37,6 +37,25 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
+
+	typedef enum{
+		Detecting  = 0,
+		Possible_Transition = 1,
+		Detected = 2
+		
+	} Type_Edge_Detection;
+	
+	typedef struct{
+		GPIO_TypeDef *port;
+		uint16_t pin;
+		GPIO_PinState Previous_state;
+		
+		GPIO_PinState Current_state;
+		type_ST debounce_timer;
+		uint32_t debounce_time;
+		Type_Edge_Detection State;
+	} gpio_edge_t;
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -54,6 +73,10 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+	void GPIO_Edge_Init(gpio_edge_t *gpio, GPIO_TypeDef *port, uint16_t pin, uint32_t debounce);
+	
+	type_bool GPIO_Edge_Detected(gpio_edge_t *gpio);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -69,6 +92,8 @@ void Error_Handler(void);
 #define LED_B_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
+
+#define DEBOUNCE_DELAY 100
 
 /* USER CODE END Private defines */
 

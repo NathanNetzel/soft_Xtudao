@@ -69,13 +69,6 @@ typedef struct
 
 }type_PWM; // tipo PWM
 
-typedef enum
-{
-	Detecting = 0,
-	Possible_transition = 1,
-	Detected = 2
-} type_transition_state;
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -99,6 +92,9 @@ type_on_off LED_B_state;
 type_bool_state BOT_B_atu, BOT_B_ant;
 type_ST ST_Timer_db_BOT_B;
 type_transition_state BOT_B_Rising_Transition;
+
+
+gpio_edge_t USER_BUTTON_Rising_Edge;
 
 /* USER CODE END PV */
 
@@ -167,6 +163,8 @@ int main(void)
 	
 	BOT_B_Rising_Transition = Detecting;
 	
+	GPIO_Edge_Init(&USER_BUTTON_Rising_Edge, BOT_B_GPIO_Port, BOT_B_Pin, DEBOUNCE_DELAY);
+	
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -177,9 +175,6 @@ int main(void)
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
-		
-		if (BOT_B_Rising_Transition == Detected)
-			HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin);
 		
 		if (ST(&ST_Timer1)) {
 			ST_Lapse(&ST_Timer1);
@@ -200,59 +195,11 @@ int main(void)
 			PWM_Update(&PWM1, 1000, 0.5, Inactive);
 		}
 	    
-		
-		BOT_B_atu = (type_bool_state)HAL_GPIO_ReadPin(BOT_B_GPIO_Port, BOT_B_Pin);
-		if (BOT_B_atu) 
-		{
-			if (LED_B_state == off) {
-				HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
-				LED_B_state = on;
-			}
+		if (GPIO_Edge_Detected(&USER_BUTTON_Rising_Edge)){
+ 
+			HAL_GPIO_TogglePin(LED_B_GPIO_Port, LED_B_Pin);
 		}
-		else 
-		{
-			if (LED_B_state == on) {
-				HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
-				LED_B_state = off;
-			}
-			
-		}
-		
-		if (BOT_B_Rising_Transition == Detecting)
-		{
-			if (BOT_B_atu == Active)
-			{
-				if (BOT_B_ant == Inactive)
-				{
-					// Saboooor transição
-					ST_Init(&ST_Timer_db_BOT_B, 200);
-					BOT_B_Rising_Transition = Possible_transition;
-				}			
-			}
-			BOT_B_ant = BOT_B_atu;
-		} 
-		else if (BOT_B_Rising_Transition == Possible_transition)
-		{
-			if (ST(&ST_Timer_db_BOT_B))
-			{
-				if (BOT_B_atu == Active)
-				{
-					BOT_B_Rising_Transition = Detected;
-				}
-				else
-				{
-					BOT_B_Rising_Transition = Detecting;
-				}
-			}
-			
-		}
-		else // Detected
-		{
-			BOT_B_Rising_Transition = Detecting;
-		}
-		
-		
-		
+	
 	} // fim da baleia
 	/* USER CODE END 3 */
 	
@@ -414,6 +361,68 @@ void PWM_Update(type_PWM *pPWM, uint32_t Period,
 		pPWM->T = pPWM->T_shadow;
 		pPWM->t_act = pPWM->T * pPWM->duty_cycle;
 		pPWM->t_ina = pPWM->T - pPWM->t_act;
+	}
+}
+
+
+void GPIO_Edge_Init(gpio_edge_t *gpio, GPIO_TypeDef *port, uint16_t pin, uint32_t debounce) {
+	gpio->port = port;
+	gpio->pin = pin;
+	gpio->Current_state = HAL_GPIO_ReadPin(port, pin);
+	gpio->Previous_state = gpio->Current_state;
+	gpio->debounce_time = debounce;
+	gpio->State = Detecting;
+}
+
+type_bool GPIO_Edge_Detected(gpio_edge_t *gpio) {
+	
+	gpio->Current_state = HAL_GPIO_ReadPin(gpio->port, gpio->pin);	
+
+	switch (gpio->State) {	
+	  
+		case Detecting:
+		  
+			if (gpio->Current_state != gpio->Previous_state) {
+				gpio->State = Possible_Transition;
+				ST_Init(&gpio->debounce_timer, gpio->debounce_time);		  
+			}	  	  
+			gpio->Previous_state = gpio->Current_state;
+		
+			break;
+	
+		case Possible_Transition:
+		  
+			if (ST(&gpio->debounce_timer)) {
+			  
+				if (gpio->Current_state == GPIO_PIN_SET) {
+					gpio->State = Detected;			  
+				}
+				else {
+				gpio->State = Detecting;
+				}		  
+			}	
+			
+			break;
+		
+		case Detected:
+		  
+			gpio->State = Detecting;
+			
+			break;
+		
+		default:
+            gpio->State = Detecting;
+			
+            break;
+	}
+	
+	if (gpio->State == Detected){
+		
+		return True;
+	}
+	else{
+		
+		return False;
 	}
 }
 
